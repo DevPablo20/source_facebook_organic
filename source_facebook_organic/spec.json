@@ -1,0 +1,81 @@
+{
+  "documentationUrl": "https://github.com/DevPablo20/source_facebook_organic",
+  "connectionSpecification": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Facebook Organic Source Spec",
+    "type": "object",
+    "required": ["access_token", "page_id", "start_date"],
+    "properties": {
+      "access_token": {
+        "type": "string",
+        "title": "Access token",
+        "description": "Token de usuário de sistema do Business Manager. O conector deriva sozinho o Page Access Token da página configurada.",
+        "airbyte_secret": true,
+        "order": 0
+      },
+      "page_id": {
+        "type": "string",
+        "title": "Page ID",
+        "description": "Uma página por conexão.",
+        "order": 1
+      },
+      "start_date": {
+        "type": "string",
+        "title": "Start date",
+        "description": "Corte histórico. Data anterior ao limite da plataforma (cerca de 2 anos para insights de página) é truncada, não rejeitada.",
+        "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+        "examples": ["2025-01-01"],
+        "format": "date",
+        "order": 2
+      },
+      "lookback_window_days": {
+        "type": "integer",
+        "title": "Lookback window (dias)",
+        "description": "Idade máxima de post que ainda tem insights e contadores reextraídos. Post mais antigo fica congelado.",
+        "default": 28,
+        "minimum": 1,
+        "order": 3
+      },
+      "comment_window_days": {
+        "type": "integer",
+        "title": "Comment window (dias)",
+        "description": "Idade máxima de post que continua sendo vigiado por comentários novos.",
+        "default": 90,
+        "minimum": 1,
+        "order": 4
+      },
+      "include_replies": {
+        "type": "boolean",
+        "title": "Incluir respostas de comentário",
+        "description": "Com respostas, usa filter=stream e a thread vem completa.",
+        "default": true,
+        "order": 5
+      },
+      "api_version": {
+        "type": "string",
+        "title": "Versão da Graph API",
+        "default": "v26.0",
+        "order": 6
+      },
+      "page_metrics": {
+        "type": "array",
+        "title": "Métricas de página",
+        "description": "Vazio usa a lista validada contra a API. Métrica inexistente é descartada com aviso.",
+        "items": {"type": "string"},
+        "order": 7
+      },
+      "post_metrics_list": {
+        "type": "array",
+        "title": "Métricas de post",
+        "items": {"type": "string"},
+        "order": 8
+      },
+      "reel_metrics": {
+        "type": "array",
+        "title": "Métricas de reel",
+        "items": {"type": "string"},
+        "order": 9
+      }
+    }
+  }
+}

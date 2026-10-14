@@ -1,0 +1,10 @@
+data:
+  connectorType: source
+  definitionId: 8f1b2c4e-6d7a-4f3b-9c21-5a0e7d4b1c90
+  dockerImageTag: 0.1.0
+  dockerRepository: devpablo20/source-facebook-organic
+  githubIssueLabel: source-facebook-organic
+  name: Facebook Organic
+  releaseStage: alpha
+  documentationUrl: https://github.com/DevPablo20/source_facebook_organic
+  supportLevel: community

@@ -4,8 +4,9 @@ Rastreabilidade do projeto: o que já está decidido, o que ainda está aberto e
 Regra deste arquivo: decisão fechada vira regra no `CLAUDE.md` e aparece aqui com data;
 medição fica aqui, nunca em `docs/*.md`.
 
-**Status:** escopo fechado e validado contra a API; nenhuma decisão elementar pendente.
-**Próxima ação:** passo 1 — esqueleto do conector e `check` autenticando na Texaco.
+**Status:** passos 1 a 5b implementados e lidos contra a Texaco. Falta empacotar (passo 6) e
+comparar com o baseline (passo 7).
+**Próxima ação:** build da imagem, push para o Docker Hub e registro no Airbyte.
 **Validação final da v1:** rodar a Texaco e comparar com o baseline medido (73 min na CAIXA,
 132 min na Loterias, ~697 posts por sync na Texaco).
 
@@ -92,15 +93,15 @@ Cada passo termina com algo verificável. Nenhum passo começa antes do anterior
 
 | # | Passo | Entrega | Verificação |
 |---|---|---|---|
-| 1 | Esqueleto | `pyproject`, `source_facebook_organic/`, `spec.json`, `Dockerfile`, `metadata.yaml` | `spec` devolve a spec completa |
-| 2 | Autenticação | derivação do Page Access Token (D16) e `check` | `check` passa na Texaco e falha com mensagem legível sem a task |
-| 3 | Streams de página | `page`, `page_insights` com fatiamento de janela e truncamento de `start_date` | `read` devolve série diária desde `start_date` sem erro de janela |
-| 4 | Streams de post | `post` (append-once, `content_type` e `reel_id` do permalink), `post_metrics`, `post_insights` com lookback e batch | sync da Texaco cobre a janela e não varre o histórico |
-| 5 | Comentários | `comment` com janela própria, gate por `total_count` e respostas por field expansion | comentários da Texaco chegam com thread montada |
-| 6 | Empacotamento | imagem `devpablo20/source-facebook-organic:0.1.0` no Docker Hub, conector registrado no Airbyte | sync real gravando em `raw/airbyte/facebook_organic/{page_id}/{stream}` |
+| 1 ✅ | Esqueleto | `pyproject`, `source_facebook_organic/`, `spec.json`, `Dockerfile`, `metadata.yaml` | `spec` devolve a spec completa |
+| 2 ✅ | Autenticação | derivação do Page Access Token (D16) e `check` | `check` passa na Texaco e falha com mensagem legível sem a task |
+| 3 ✅ | Streams de página | `page`, `page_insights` com fatiamento de janela e truncamento de `start_date` | `read` devolve série diária desde `start_date` sem erro de janela |
+| 4 ✅ | Streams de post | `post` (append-once, `content_type` e `reel_id` do permalink), `post_metrics`, `post_insights` com lookback e batch | sync da Texaco cobre a janela e não varre o histórico |
+| 5 ✅ | Comentários | `comment` com janela própria, gate por `total_count` e respostas por field expansion | comentários da Texaco chegam com thread montada |
+| 6 ⏳ | Empacotamento | imagem `devpablo20/source-facebook-organic:0.1.0` no Docker Hub, conector registrado no Airbyte | sync real gravando em `raw/airbyte/facebook_organic/{page_id}/{stream}` |
 | 7 | Comparação com o baseline | medir duração e volume contra os números de 14/10 | ganho demonstrado, não presumido |
-| 4b | `reel_insights` | 7 métricas próprias de reel por `/{reel_id}/video_insights` | plays e retenção chegando por reel da janela |
-| 5b | `story` | inventário horário + `total_video_views` por `media_id` | story capturada antes de expirar |
+| 4b ✅ | `reel_insights` | 7 métricas próprias de reel por `/{reel_id}/video_insights` | plays e retenção chegando por reel da janela |
+| 5b ✅ | `story` | inventário horário + `total_video_views` por `media_id` | story capturada antes de expirar |
 
 A integração no `binder_etl` (bronze/silver/gold das streams novas e aposentadoria do
 conector antigo) é feita **no repositório do `binder_etl`**, não aqui.
@@ -108,6 +109,33 @@ conector antigo) é feita **no repositório do `binder_etl`**, não aqui.
 Opcionais, depois do passo 7: CAT (P16) e a conexão horária de crise (P17).
 
 ## Medições
+
+**2026-10-14 — leitura real das 8 streams (Texaco, `start_date` 2026-01-01, lookback 28d).**
+
+| Stream | 1ª execução | 2ª execução (com state) |
+|---|---|---|
+| `page` | 1 registro, 3s | — (full refresh) |
+| `page_insights` | 5.453 registros, 12s | — |
+| `post` | 209 registros, 18s | cursor em `created_time` |
+| `post_metrics` | 209 registros, 10s | — |
+| `post_insights` | 9.599 registros, 184s | **877 registros, 26s — 19 posts na janela** |
+| `reel_insights` | 738 registros, 132s | — |
+| `comment` | 112 registros, 51s | **0 registros, 6s — 27 posts pulados pelo gate de `total_count`** |
+| `story` | 3 registros, 6s | — |
+
+**O ganho medido:** o conector oficial lê insights de ~697 posts por sync, todo dia. Este lê
+**19**. A segunda execução de `post_insights` leva 26 segundos contra os 73 minutos que a
+CAIXA leva hoje — em páginas de porte diferente, mas com a mesma mecânica. O gate de
+comentários derruba o custo a zero quando nada mudou.
+
+**2026-10-14 — defeitos encontrados e corrigidos na validação.**
+1. O token aparecia na mensagem de erro quando a URL de paginação falhava. Corrigido com
+   redação de `access_token` em toda mensagem, log e traceback.
+2. HTTP 500 transitório era rotulado como limite de uso. Agora são tratados separadamente,
+   com mensagens distintas.
+3. `/video_reels` recusa `limit=100` com *"Please reduce the amount of data you're asking
+   for"*. O cliente passou a reduzir o tamanho da página sozinho, inclusive em URL de
+   paginação, e a edge de reels usa 25 por padrão.
 
 **2026-10-14 — token e acessos.** Token do `.env` é SYSTEM_USER do App `BI_Binder`, sem
 expiração, alcançando 7 páginas (CAIXA, CAIXA Investe ×2, Loterias CAIXA, Se liga na Caixa,
