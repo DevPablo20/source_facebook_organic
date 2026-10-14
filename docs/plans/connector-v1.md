@@ -4,9 +4,18 @@ Rastreabilidade do projeto: o que já está decidido, o que ainda está aberto e
 Regra deste arquivo: decisão fechada vira regra no `CLAUDE.md` e aparece aqui com data;
 medição fica aqui, nunca em `docs/*.md`.
 
-**Status:** passos 1 a 5b implementados e lidos contra a Texaco. Falta empacotar (passo 6) e
-comparar com o baseline (passo 7).
-**Próxima ação:** build da imagem, push para o Docker Hub e registro no Airbyte.
+**Status:** v1 completa. Conector publicado, registrado no Airbyte de desenvolvimento e com
+dois syncs reais na Texaco, gravando no MinIO local.
+**Próxima ação:** replicar a task de moderação nas outras páginas (P7b) e levar o conector
+para produção; a camada medallion é trabalho no repositório do `binder_etl`.
+
+## Ambientes
+
+| | Desenvolvimento | Produção |
+|---|---|---|
+| Airbyte | `localhost:8080` | — |
+| MinIO | `localhost:9000` (console 9001) | `192.168.10.80:9000` (console 9001) |
+| Uso | onde este conector roda e é validado | só leitura, para comparação |
 **Validação final da v1:** rodar a Texaco e comparar com o baseline medido (73 min na CAIXA,
 132 min na Loterias, ~697 posts por sync na Texaco).
 
@@ -98,8 +107,8 @@ Cada passo termina com algo verificável. Nenhum passo começa antes do anterior
 | 3 ✅ | Streams de página | `page`, `page_insights` com fatiamento de janela e truncamento de `start_date` | `read` devolve série diária desde `start_date` sem erro de janela |
 | 4 ✅ | Streams de post | `post` (append-once, `content_type` e `reel_id` do permalink), `post_metrics`, `post_insights` com lookback e batch | sync da Texaco cobre a janela e não varre o histórico |
 | 5 ✅ | Comentários | `comment` com janela própria, gate por `total_count` e respostas por field expansion | comentários da Texaco chegam com thread montada |
-| 6 ⏳ | Empacotamento | imagem `devpablo20/source-facebook-organic:0.1.0` no Docker Hub, conector registrado no Airbyte | sync real gravando em `raw/airbyte/facebook_organic/{page_id}/{stream}` |
-| 7 | Comparação com o baseline | medir duração e volume contra os números de 14/10 | ganho demonstrado, não presumido |
+| 6 ✅ | Empacotamento | imagem `devpablo20/source-facebook-organic:0.1.0` no Docker Hub, conector registrado no Airbyte | sync real gravando em `raw/airbyte/facebook_organic/{page_id}/{stream}` |
+| 7 ✅ | Comparação com o baseline | medir duração e volume contra os números de 14/10 | ganho demonstrado, não presumido |
 | 4b ✅ | `reel_insights` | 7 métricas próprias de reel por `/{reel_id}/video_insights` | plays e retenção chegando por reel da janela |
 | 5b ✅ | `story` | inventário horário + `total_video_views` por `media_id` | story capturada antes de expirar |
 
@@ -109,6 +118,34 @@ conector antigo) é feita **no repositório do `binder_etl`**, não aqui.
 Opcionais, depois do passo 7: CAT (P16) e a conexão horária de crise (P17).
 
 ## Medições
+
+**2026-10-14 — sync real pelo Airbyte (dev, Texaco, lookback 28d).** Conector
+`devpablo20/source-facebook-organic:0.1.0`, definição custom `30689bcf…`, conexão
+`96698766…`, destino S3 local com namespace `facebook_organic/{page_id}` — o mesmo caminho
+da produção.
+
+| Stream | 1º sync (backfill) | 2º sync (diário) |
+|---|---|---|
+| `page_insights` | 5.453 | 551 |
+| `post` | 209 | 0 |
+| `post_metrics` | 209 | 19 |
+| `post_insights` | 9.599 | 877 |
+| `reel_insights` | 738 | 72 |
+| `comment` | 112 | 0 |
+| `page` / `story` | 1 / 3 | 1 / 3 |
+| **total** | **16.324 registros, 395s** | **1.523 registros, 71s** |
+
+**Comparação com o conector oficial, na mesma página.** O parquet de produção de 14/10 traz
+3.954 linhas de `post_insights` num único sync, cobrindo ~697 posts com 5 métricas. O novo
+entrega 877 linhas cobrindo 19 posts com 21 métricas: **4,5× menos registros carregando 4×
+mais métricas**, porque deixou de reler o histórico inteiro todo dia.
+
+**Achado sobre o destino, não sobre o conector:** o S3 escreve ~5 MiB por arquivo mesmo
+quando o stream tem 1 registro — é padding de parquet (`block_size_mb: 128`). Os 46 MiB
+gravados no dev correspondem a ~4,9 MiB de dado real, e boa parte dos 1,7 GiB de
+`facebook_organic` em produção é padding, não conteúdo. Reduzir `block_size_mb` no destino
+encolheria o lake inteiro — vale avaliar no `binder_etl`, porque o destino é compartilhado
+com as outras plataformas.
 
 **2026-10-14 — leitura real das 8 streams (Texaco, `start_date` 2026-01-01, lookback 28d).**
 
