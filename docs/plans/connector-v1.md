@@ -117,6 +117,13 @@ conector antigo) é feita **no repositório do `binder_etl`**, não aqui.
 
 Opcionais, depois do passo 7: CAT (P16) e a conexão horária de crise (P17).
 
+**2026-10-15 — documentação do conector.** O painel lateral do Airbyte é servido por
+`/api/v1/connector_documentation/get`, que busca a doc no registry oficial por nome de
+imagem; conector custom não está lá e o webapp **não tem fallback** para `documentationUrl`
+(verificado no bundle). A definição custom também ignora `documentationUrl` em update. Por
+isso a documentação do operador foi para dois lugares: `docs/connector.md` no repositório e
+as `description` da spec, que o formulário renderiza em markdown. Versão 0.1.1.
+
 ## Medições
 
 **2026-10-14 — sync real pelo Airbyte (dev, Texaco, lookback 28d).** Conector

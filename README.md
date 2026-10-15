@@ -50,8 +50,8 @@ cp .env.example .env            # preencha; secrets/config.json é gerado a part
 ## Publicação
 
 ```bash
-docker build -t devpablo20/source-facebook-organic:0.1.0 .
-docker push devpablo20/source-facebook-organic:0.1.0
+docker build -t devpablo20/source-facebook-organic:0.1.1 .
+docker push devpablo20/source-facebook-organic:0.1.1
 ```
 
 No Airbyte: Settings → Sources → New connector → nome `Facebook Organic`, imagem

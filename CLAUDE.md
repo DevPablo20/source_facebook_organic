@@ -16,9 +16,15 @@ clientes, substituindo ferramentas externas de social listening (Brandwatch, Zin
 
 ## Estado
 
-Escopo fechado, implementação não iniciada. Decisões (fechadas e pendentes), status,
-medições e diário em [docs/plans/connector-v1.md](docs/plans/connector-v1.md). Referências
-externas e achados de API em [docs/docs.md](docs/docs.md).
+v1 implementada e validada: as 8 streams rodam pelo Airbyte de desenvolvimento gravando no
+MinIO local. Decisões (fechadas e pendentes), status, medições e diário em
+[docs/plans/connector-v1.md](docs/plans/connector-v1.md). Referências externas e achados de
+API em [docs/docs.md](docs/docs.md).
+
+| Ambiente | Airbyte | MinIO |
+|---|---|---|
+| Desenvolvimento | `localhost:8080` | `localhost:9000` (console 9001) |
+| Produção | — | `192.168.10.80:9000` (console 9001), só leitura para comparação |
 
 ## Invariantes
 
@@ -47,7 +53,6 @@ Contradizer uma delas é bug, não escolha de implementação.
 | `post` | `/{page-id}/published_posts` | Incremental + Append | `created_time` | `post_id` | post publicado pela página |
 | `post_metrics` | `/{page-id}/published_posts` (campos de contagem) | Incremental + Append | `created_time` do post | `post_id + snapshot_date` | contadores × post × snapshot |
 | `post_insights` | `/{post-id}/insights` | Incremental + Append | `created_time` do post | `post_id + metric + period + snapshot_date` | métrica × post × snapshot |
-| `reel` | `/{page-id}/video_reels` | Incremental + Append | `created_time` | `reel_id` | reel |
 | `reel_insights` | `/{reel-id}/video_insights` | Incremental + Append | `created_time` do reel | `reel_id + metric + snapshot_date` | métrica × reel × snapshot |
 | `story` | `/{page-id}/stories` | Full refresh + Append | — | `media_id + snapshot_date` | story enquanto está no ar |
 | `comment` | `/{post-id}/comments` | Incremental + Append | `created_time` do comentário, por post | `comment_id` | comentário e resposta |
@@ -69,8 +74,8 @@ append-once e a série de contagem não duplica o texto do post a cada snapshot.
   User** — erro 190/210. O token derivado nunca é gravado em registro de saída.
 - **Reel é post.** O reel aparece em `/published_posts` com id próprio e
   `permalink_url = facebook.com/reel/{reel_id}/`. O fato é sempre `post`; `content_type` sai
-  do permalink e a junção com `reel` usa o `reel_id` extraído dele. A stream `reel` existe só
-  para métrica que o post não tem (`blue_reels_play_count`, via `/{id}/video_insights`).
+  do permalink e a junção com `reel_insights` usa o `reel_id` extraído dele. Não existe
+  stream `reel`: só `reel_insights`, com a métrica que o post não tem.
 - **Story só existe por 24h.** A stream `story` depende de sync horário; em sync diário a
   story simplesmente não existe quando o conector olha. Story nunca é incremental por
   cursor — é foto do que está no ar.
@@ -104,7 +109,11 @@ append-once e a série de contagem não duplica o texto do post a cada snapshot.
   `x-app-usage`. `sleep` fixo é proibido.
 - **Mudar `start_date`, `lookback_window_days` ou a lista de métricas exige Clear data** dos
   streams afetados no Airbyte.
-- **Nenhum token em registro de saída.** `page` nunca extrai `access_token`.
+- **Nenhum token em registro de saída.** `page` nunca extrai `access_token`, e qualquer URL
+  em log, erro ou traceback tem o `access_token` redigido.
+- **A spec é a documentação que o operador vê.** O painel lateral do Airbyte só serve
+  conectores do registry oficial, então regra de negócio de cada campo mora na `description`
+  da spec. Mudou o comportamento de um parâmetro, muda a descrição no mesmo commit.
 - **Métrica não validada contra a API não entra na lista.** A lista vem de descoberta contra
   página real, não da documentação nem do conector antigo: pedir métrica morta derruba o
   request inteiro, e a mensagem de erro da Graph API **não** enumera as válidas. A
@@ -143,7 +152,7 @@ O ETL vive em `/var/www/binder_app/binder_etl` (medallion Spark + Delta no MinIO
 
 - Destino: bucket `raw`, path format **`airbyte/facebook_organic/{page_id}/{stream}`** — a
   mesma convenção que o pipeline já usa hoje, preservada porque a conexão é por página. O
-  lake de verdade é o MinIO em `192.168.10.80:9000`, não o do host de desenvolvimento.
+  lake de produção é o MinIO em `192.168.10.80:9000`; em desenvolvimento, o local.
 - Três conexões sobre o mesmo source: **diária** (todos os streams, 01:00
   America/Sao_Paulo, antes do DAG `facebook_organic_daily`), **horária de stories**
   (`story`) e **horária de crise** (`post`, `post_metrics`, `comment`), ligada sob demanda.
@@ -154,6 +163,7 @@ O ETL vive em `/var/www/binder_app/binder_etl` (medallion Spark + Delta no MinIO
 
 | Arquivo | Quando ler |
 |---|---|
+| [docs/connector.md](docs/connector.md) | guia de uso: pré-requisitos, campos, o que cada stream responde, métricas e erros comuns |
 | [docs/docs.md](docs/docs.md) | links e extratos: Graph API, CDK, destino S3, limites, permissões e achados de API |
 | [docs/metrics.md](docs/metrics.md) | quais métricas de insight respondem hoje e o que cada uma significa |
 | [docs/plans/connector-v1.md](docs/plans/connector-v1.md) | decisões fechadas e pendentes, próxima ação, medições datadas |

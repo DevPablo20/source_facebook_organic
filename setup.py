@@ -2,7 +2,7 @@ from setuptools import find_packages, setup
 
 setup(
     name="source_facebook_organic",
-    version="0.1.0",
+    version="0.1.1",
     description="Conector Airbyte para conteúdo orgânico de páginas do Facebook",
     author="Binder",
     packages=find_packages(exclude=("tests",)),

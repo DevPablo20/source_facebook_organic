@@ -1,37 +1,43 @@
 {
-  "documentationUrl": "https://github.com/DevPablo20/source_facebook_organic",
+  "documentationUrl": "https://github.com/DevPablo20/source_facebook_organic/blob/main/docs/connector.md",
   "connectionSpecification": {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "title": "Facebook Organic Source Spec",
     "type": "object",
-    "required": ["access_token", "page_id", "start_date"],
+    "required": [
+      "access_token",
+      "page_id",
+      "start_date"
+    ],
     "properties": {
       "access_token": {
         "type": "string",
         "title": "Access token",
-        "description": "Token de usuário de sistema do Business Manager. O conector deriva sozinho o Page Access Token da página configurada.",
+        "description": "Token de **usuário de sistema** do Business Manager. O conector deriva sozinho o Page Access Token a cada sync — edges de página recusam o token de sistema.\n\nPermissões: `pages_show_list`, `pages_read_engagement`, `pages_read_user_content` (comentários), `read_insights`, `business_management`.",
         "airbyte_secret": true,
         "order": 0
       },
       "page_id": {
         "type": "string",
         "title": "Page ID",
-        "description": "Uma página por conexão.",
+        "description": "**Uma página por conexão.** Para vários clientes, crie uma conexão por página.\n\nDescubra com `GET /v26.0/me/accounts?fields=id,name,tasks`.",
         "order": 1
       },
       "start_date": {
         "type": "string",
         "title": "Start date",
-        "description": "Corte histórico. Data anterior ao limite da plataforma (cerca de 2 anos para insights de página) é truncada, não rejeitada.",
+        "description": "Corte histórico: nada anterior a esta data é extraído.\n\nInsights de página têm ~2 anos de retenção na plataforma; data mais antiga é **truncada com log**, nunca rejeitada. Mudar este campo exige *Clear data* dos streams.",
         "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
-        "examples": ["2025-01-01"],
+        "examples": [
+          "2025-01-01"
+        ],
         "format": "date",
         "order": 2
       },
       "lookback_window_days": {
         "type": "integer",
         "title": "Lookback window (dias)",
-        "description": "Idade máxima de post que ainda tem insights e contadores reextraídos. Post mais antigo fica congelado.",
+        "description": "Idade máxima de post que ainda tem insights e contadores reextraídos. **É o parâmetro que governa a duração do sync.**\n\nMétrica de post é `lifetime` e continua crescendo após a publicação: ~80–90% do alcance acontece em 48–72h, com cauda até ~28 dias — daí o default. Post mais antigo que a janela **congela**: não é consultado de novo. Aumentar para 90 multiplica o custo por ~3.",
         "default": 28,
         "minimum": 1,
         "order": 3
@@ -39,7 +45,7 @@
       "comment_window_days": {
         "type": "integer",
         "title": "Comment window (dias)",
-        "description": "Idade máxima de post que continua sendo vigiado por comentários novos.",
+        "description": "Idade máxima de post que continua sendo vigiado por comentário novo.\n\nJanela separada do lookback porque comentário chega em post antigo muito depois das métricas estabilizarem. Post sem comentário novo custa zero: o conector compara o `total_count` antes de paginar.",
         "default": 90,
         "minimum": 1,
         "order": 4
@@ -47,7 +53,7 @@
       "include_replies": {
         "type": "boolean",
         "title": "Incluir respostas de comentário",
-        "description": "Com respostas, usa filter=stream e a thread vem completa.",
+        "description": "Ligado, usa `filter=stream`: respostas vêm na mesma stream, ligadas por `parent_id`. Desligado, só comentários de 1º nível — o campo `comment_count` ainda indica que existe thread.\n\nA API **não devolve o autor** do comentário (`from` é sempre nulo), em nenhum dos modos.",
         "default": true,
         "order": 5
       },
@@ -55,27 +61,37 @@
         "type": "string",
         "title": "Versão da Graph API",
         "default": "v26.0",
-        "order": 6
+        "order": 6,
+        "description": "Validada em `v26.0`. As versões v24, v25 e v26 respondem igual nas métricas desta lista; a v26 rejeita `page_video_views_unique` e `post_video_views_unique`, que já são obsoletas e ficam fora do default."
       },
       "page_metrics": {
         "type": "array",
         "title": "Métricas de página",
-        "description": "Vazio usa a lista validada contra a API. Métrica inexistente é descartada com aviso.",
-        "items": {"type": "string"},
+        "description": "Vazio usa a lista validada contra a API. Métrica inexistente é descartada com aviso, sem derrubar o sync.\n\n**Impressão e alcance mudaram de nome:** use `page_media_view` e `page_total_media_view_unique`. Nomes `page_impressions*`, `page_fans*` e `page_engaged_users` estão mortos na API.",
+        "items": {
+          "type": "string"
+        },
         "order": 7
       },
       "post_metrics_list": {
         "type": "array",
         "title": "Métricas de post",
-        "items": {"type": "string"},
-        "order": 8
+        "items": {
+          "type": "string"
+        },
+        "order": 8,
+        "description": "Vazio usa a lista validada. Toda métrica de post é `lifetime` — por isso cada leitura vai gravada com `snapshot_date`.\n\nAlcance e visualizações são `post_media_view` e `post_total_media_view_unique`. Métricas estruturadas (`post_reactions_by_type_total`, `post_clicks_by_type`, `post_video_retention_graph`) chegam em `value_json`; as escalares em `value_numeric`."
       },
       "reel_metrics": {
         "type": "array",
         "title": "Métricas de reel",
-        "items": {"type": "string"},
-        "order": 9
+        "items": {
+          "type": "string"
+        },
+        "order": 9,
+        "description": "Vazio usa a lista validada. Aqui entra só o que o post não tem: reproduções, repetições e retenção. Alcance e reações do reel vêm pelas streams `post` e `post_insights`, porque **reel é post**."
       }
-    }
+    },
+    "description": "Conteúdo orgânico de uma página do Facebook: página, insights, posts, reels, stories e comentários, com janela de extração configurável e snapshot datado.\n\n**Antes de configurar:** o usuário de sistema precisa, em *Gerir atribuições* da página, da task **Estatísticas** (insights) e da task **Atividade da comunidade** (comentários). Sem a segunda, a API devolve a contagem de comentários mas lista vazia.\n\n[Guia completo de uso](https://github.com/DevPablo20/source_facebook_organic/blob/main/docs/connector.md)"
   }
 }
