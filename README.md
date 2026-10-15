@@ -4,9 +4,16 @@ Conector Airbyte (Python CDK) para conteúdo orgânico de páginas do Facebook �
 insights, posts, reels, stories e comentários — com janela de extração configurável e
 snapshot datado. Substitui o `source-facebook-pages` oficial, que não tem modo incremental.
 
+**→ [Guia de uso do conector](docs/connector.md)** — pré-requisitos, tasks da página, efeito
+de cada campo, o que cada stream responde, métricas com significado e erros comuns.
+
 Escopo, regras e decisões: [CLAUDE.md](CLAUDE.md) ·
-[docs/docs.md](docs/docs.md) · [docs/metrics.md](docs/metrics.md) ·
+[docs/metrics.md](docs/metrics.md) · [docs/docs.md](docs/docs.md) ·
 [docs/plans/connector-v1.md](docs/plans/connector-v1.md)
+
+> O painel *Setup Guide* do Airbyte só exibe documentação de conectores do registry oficial.
+> Para este conector, a documentação está neste guia e nas descrições da spec, que o
+> formulário de configuração renderiza campo a campo.
 
 ## Streams
 
